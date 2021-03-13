@@ -1,0 +1,127 @@
+---
+title: "Yelp"
+author: "Xuanbin_Chen"
+date: "2021/3/9"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r,message=FALSE}
+library(tidyverse)
+library(jsonlite)
+library(lubridate)
+library(httr)
+```
+
+```{r}
+readRenviron(".Renviron")
+```
+
+```{r}
+r<-GET(
+  "https://api.yelp.com/v3/businesses/search",
+  add_headers(Authorization = paste("Bearer", Sys.getenv("YELP_TOKEN"))),
+  query = list(
+    term = "Milk Tea",
+    location = "Davis"
+  )
+)
+r$status_code
+### Check Request Conditions
+stop_for_status(r)
+
+### Encode
+json <- content(r, as = "text",encoding = "UTF-8")
+
+### Display the result
+id<-fromJSON(json, flatten = TRUE)$businesses %>% 
+  pull(id) %>% head(10)
+
+stores<-fromJSON(json, flatten = TRUE)$businesses %>% select(1,3:5,7:11,13:14,17) %>% head(10)
+stores %>% filter(name=="MandRo Teahouse") %>% pull(id)
+```
+
+```{r}
+r<-GET(
+  str_glue("https://api.yelp.com/v3/businesses/{id}",id=id[2]),
+  add_headers(Authorization = paste("Bearer", Sys.getenv("YELP_TOKEN")))
+)
+
+### Check Request Conditions
+stop_for_status(r)
+
+### Encode
+json <- content(r, as = "text",encoding = "UTF-8")
+tp<-fromJSON(json,flatten = TRUE)
+
+### Display the result
+basic_info<-cbind(tp$name,tp$is_claimed,tp$is_closed,tp$url,tp$display_phone,tp$review_count,tp$rating,str_c(tp$location$display_address[1],tp$location$display_address[2]))
+categories<-tp$categories$title
+business_hour<-fromJSON(json, flatten = TRUE)$url
+```
+
+```{r}
+r<-GET(
+  "https://api.yelp.com/v3/autocomplete",
+  add_headers(Authorization = paste("Bearer", Sys.getenv("YELP_TOKEN"))),
+  query = list(
+    text = "Milk Tea",
+    latitude = 38.54439,
+    longitude = -121.7393
+  )
+)
+
+stop_for_status(r)
+json<-content(r, as = "text", encoding = "UTF-8")
+td<-fromJSON(json,flatten = TRUE)
+```
+
+```{r}
+r<-GET(
+  str_glue("https://api.yelp.com/v3/businesses/{id}/reviews",id=id[1]),
+  add_headers(Authorization = paste("Bearer", Sys.getenv("YELP_TOKEN")))
+)
+
+### Check Request Conditions
+stop_for_status(r)
+
+### Encode
+json <- content(r, as = "text",encoding = "UTF-8")
+
+### Display the result
+reviews<-fromJSON(json, flatten = TRUE)$reviews %>% select(user.name,text,rating)
+```
+
+```{r}
+library(rvest)
+url<-"https://www.yelp.com/biz/mandro-teahouse-davis?adjust_creative=gtK0iexkfdZPUJvyUTRDzw&utm_campaign=yelp_api_v3&utm_medium=api_v3_business_lookup&utm_source=gtK0iexkfdZPUJvyUTRDzw"
+html<-read_html(url)
+stopifnot(xml_attrs(xml_child(xml_child(xml_child(xml_child(xml_child(xml_child(xml_child(xml_child(xml_child(xml_child(xml_child(html, 2), 6), 4), 1), 1), 4), 1), 1), 1), 1), 1))[4])
+img<-xml_attrs(xml_child(xml_child(xml_child(xml_child(xml_child(xml_child(xml_child(xml_child(xml_child(xml_child(xml_child(html, 2), 6), 4), 1), 1), 4), 1), 1), 1), 1), 1))[4]
+knitr::include_graphics(url)
+if(any(xml_attrs(xml_child(xml_child(xml_child(xml_child(xml_child(xml_child(xml_child(xml_child(xml_child(xml_child(xml_child(html, 2), 6), 4), 1), 1), 4), 1), 1), 1), 1), 1))[4])){
+  stop("No Business Icon")
+}
+url<-try(xml_attrs(xml_child(xml_child(xml_child(xml_child(xml_child(xml_child(xml_child(xml_child(xml_child(xml_child(xml_child(html, 2), 6), 4), 1), 1), 4), 1), 1), 1), 1), 1))[4],silent = TRUE)
+```
+
+```{r}
+library(tidytext)
+token<-reviews%>% unnest_tokens(word,text) %>% anti_join(stop_words) %>% count(word, sort = TRUE)
+(propotions <- tokens %>% 
+  group_by(id) %>% 
+  mutate(propotion = n / sum(n)) %>% 
+  select(-n) %>%
+  arrange(id, desc(propotion)))
+library(wordcloud)
+ token %>% 
+  with(wordcloud(
+    word, n, min.freq = 1, max.words = 25, random.order = FALSE,
+    colors = brewer.pal(8, "Dark2")))
+```
+
