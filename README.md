@@ -1,4 +1,4 @@
-# STA_141B_FINAL_PROJECT
+# Milk Tea Search
 A General Milk Tea Search make usage of YELP API. 
 
 It is an idea I derived when I working on the homework assignment 5 Q1.
